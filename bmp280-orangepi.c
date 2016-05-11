@@ -1,0 +1,134 @@
+/* Copyright (c) 2016 Max Asaulov
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to
+ * deal in the Software without restriction, including without limitation the
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ */
+
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <linux/i2c-dev.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <math.h>
+#include "bmp280.h"
+
+#define PATH_STR   "/dev/i2c-0"
+
+static const uint8_t addr_array[] = {0b1110110, 0b1110111};
+static int file = -1;
+
+static s8 BMP280_I2C_bus_write(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cnt)
+{
+	if (ioctl(file, I2C_SLAVE, dev_addr) < 0) {
+		return ERROR;
+        };
+        size_t written = write(file, &reg_addr, 1);
+	if (written != 1) {
+		return ERROR;
+	};
+	written = write(file, reg_data, cnt);
+	if (written != cnt) {
+		return ERROR;
+	};
+	return SUCCESS;
+}
+
+static s8 BMP280_I2C_bus_read(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cnt)
+{
+        if (ioctl(file, I2C_SLAVE, dev_addr) < 0) {
+		return ERROR;
+        }
+	size_t written = write(file, &reg_addr, 1);
+        if (written != 1) {
+                return ERROR;
+        };
+        size_t size = read(file, reg_data, cnt);
+        if (size != cnt) {
+                return ERROR;
+        };
+        return SUCCESS;
+}
+
+static void BMP280_delay_msec(BMP280_MDELAY_DATA_TYPE ms)
+{
+        usleep(ms*1000);
+}
+
+int main()
+{
+	printf("Starting test...\n");
+	file = open(PATH_STR, O_RDWR);
+	if (file < 0) {
+		printf("Error opening a bus %s : %s\n", PATH_STR, strerror(errno));
+		if (errno == EACCES) {
+			printf("Try sudo\n");
+		};
+		exit(1);
+	};
+        struct bmp280_t bmp280;
+        bmp280.bus_read = BMP280_I2C_bus_read;
+        bmp280.bus_write = BMP280_I2C_bus_write;
+        bmp280.delay_msec = BMP280_delay_msec;
+	for (size_t i = 0; i < (sizeof(addr_array)/sizeof(addr_array[0])); i++) {
+		bmp280.chip_id = 0xFF;
+                bmp280.dev_addr = addr_array[i];
+                s32 com_rslt = bmp280_init(&bmp280);
+                printf("  > Testing 0x%2X -> %s\n", bmp280.dev_addr, (com_rslt == 0) ? "Found" : "Not found");
+                if (com_rslt != 0) {
+                        continue;
+		}
+		/* CP from template */
+		/* The variable used to assign the standby time*/
+		u8 v_standby_time_u8 = BMP280_INIT_VALUE;
+		/* The variable used to read uncompensated temperature*/
+		s32 v_data_uncomp_tem_s32 = BMP280_INIT_VALUE;
+		/* The variable used to read uncompensated pressure*/
+		s32 v_data_uncomp_pres_s32 = BMP280_INIT_VALUE;
+		/* The variable used to read real temperature*/
+		s32 v_actual_temp_s32 = BMP280_INIT_VALUE;
+		/* The variable used to read real pressure*/
+		u32 v_actual_press_u32 = BMP280_INIT_VALUE;
+		s32 v_actual_press_data_s32 = BMP280_INIT_VALUE;
+		/* result of communication results*/
+		com_rslt += bmp280_set_power_mode(BMP280_NORMAL_MODE);
+		com_rslt += bmp280_set_work_mode(BMP280_HIGH_RESOLUTION_MODE);
+		com_rslt += bmp280_set_standby_durn(BMP280_STANDBY_TIME_1_MS);
+	        sleep(1);	
+		com_rslt += bmp280_read_uncomp_pressure_temperature(&v_actual_press_data_s32, &v_actual_temp_s32);
+		printf("   > Temp %i C preassure  %i millibar \n", v_actual_temp_s32, v_actual_press_data_s32);
+             	sleep(1);
+		com_rslt += bmp280_read_pressure_temperature(&v_actual_press_u32,  &v_actual_temp_s32);
+		if (com_rslt != 0) {
+                	continue;
+              	}
+              	printf("   > Temp %i.%.2i C preassure  %i.%.2i millibar \n", v_actual_temp_s32/100,
+                                                                          v_actual_temp_s32 % 100 ,
+                                                                          v_actual_press_u32/100,
+                                                                          v_actual_press_u32 % 100);
+		com_rslt += bmp280_set_power_mode(BMP280_SLEEP_MODE);
+	}
+	
+	close(file);
+	return 0;
+}
