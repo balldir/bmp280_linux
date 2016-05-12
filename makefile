@@ -19,7 +19,7 @@
 # IN THE SOFTWARE.
 
 # Project name
-NAME := bmp280_orangepi
+NAME := bmp280_linux
 
 # Echo
 NOECHO ?= @

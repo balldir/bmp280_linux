@@ -1,10 +1,12 @@
-# HTU21 orange-pi test
+# BMP280 Linux 
 
-A simple program for comunicating with HTU21 from orange-pi.
+A simple user space application to get data from BMP280.
 
-To test it
+To test it 
 
 ```
 make
-sudo ./build/htu21-orangepi-test.elf
+sudo ./build/bmp_linux.elf
 ```
+
+Was tested with orangepi one.
