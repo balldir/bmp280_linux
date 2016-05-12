@@ -39,58 +39,6 @@
 static const uint8_t addr_array[] = {0b1110110, 0b1110111};
 static int file = -1;
 
-void hexDump (char *desc, void *addr, int len) {
-    int i;
-    unsigned char buff[17];
-    unsigned char *pc = (unsigned char*)addr;
-
-    // Output description if given.
-    if (desc != NULL)
-        printf ("%s:\n", desc);
-
-    if (len == 0) {
-        printf("  ZERO LENGTH\n");
-        return;
-    }
-    if (len < 0) {
-        printf("  NEGATIVE LENGTH: %i\n",len);
-        return;
-    }
-
-    // Process every byte in the data.
-    for (i = 0; i < len; i++) {
-        // Multiple of 16 means new line (with line offset).
-
-        if ((i % 16) == 0) {
-            // Just don't print ASCII for the zeroth line.
-            if (i != 0)
-                printf ("  %s\n", buff);
-
-            // Output the offset.
-            printf ("  %04x ", i);
-        }
-
-        // Now the hex code for the specific character.
-        printf (" %02x", pc[i]);
-
-        // And store a printable ASCII character for later.
-        if ((pc[i] < 0x20) || (pc[i] > 0x7e))
-            buff[i % 16] = '.';
-        else
-            buff[i % 16] = pc[i];
-        buff[(i % 16) + 1] = '\0';
-    }
-
-    // Pad out last line if not exactly 16 characters.
-    while ((i % 16) != 0) {
-        printf ("   ");
-        i++;
-    }
-
-    // And print the final ASCII bit.
-    printf ("  %s\n", buff);
-}
-
  s8 BMP280_I2C_bus_write(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cnt)
 {
 	struct i2c_rdwr_ioctl_data packets;
@@ -104,16 +52,12 @@ void hexDump (char *desc, void *addr, int len) {
     	messages[0].len   = sizeof(out_buff);
     	messages[0].buf   = out_buff;
 
-    	/* Transfer the i2c packets to the kernel and verify it worked */
     	packets.msgs  = messages;
     	packets.nmsgs = 1;
     	if(ioctl(file, I2C_RDWR, &packets) < 0) {
-        	perror("Unable to send data");
         	return ERROR;
     	}
 
-	printf("register write %2X\n", reg_addr);
-        hexDump("Written data: ", reg_data, cnt);
 	return SUCCESS;
 }
 
@@ -132,16 +76,12 @@ static s8 BMP280_I2C_bus_read(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cnt)
         messages[1].len   = cnt;
         messages[1].buf   = reg_data;
 
-        /* Transfer the i2c packets to the kernel and verify it worked */
         packets.msgs  = messages;
         packets.nmsgs = 2;
         if(ioctl(file, I2C_RDWR, &packets) < 0) {
-                perror("Unable to receive data");
                 return ERROR;
         }
 
-	printf("register read %2X\n", reg_addr);
-	hexDump("Read data: ",reg_data,cnt);
         return SUCCESS;
 }
 
@@ -189,8 +129,6 @@ int main()
 		com_rslt += bmp280_set_power_mode(BMP280_NORMAL_MODE);
 		com_rslt += bmp280_set_work_mode(BMP280_HIGH_RESOLUTION_MODE);
 		com_rslt += bmp280_set_standby_durn(BMP280_STANDBY_TIME_1_MS);
-		com_rslt += bmp280_read_uncomp_pressure_temperature(&v_actual_press_data_s32, &v_actual_temp_s32);
-		printf("   > Temp %i C preassure  %i millibar \n", v_actual_temp_s32, v_actual_press_data_s32);
 		com_rslt += bmp280_read_pressure_temperature(&v_actual_press_u32,  &v_actual_temp_s32);
 		if (com_rslt != 0) {
                 	continue;
